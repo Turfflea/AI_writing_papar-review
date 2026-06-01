@@ -79,6 +79,12 @@ Write only one section:
 python3 scripts/07_write_review.py --section-title "研究方法综述"
 ```
 
+Run a local smoke test:
+
+```bash
+python3 scripts/smoke_test.py
+```
+
 ## API Settings
 
 The scripts read settings from `.env` or environment variables:
