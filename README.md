@@ -5,16 +5,25 @@ It is designed for Chinese academic review writing and uses an OpenAI-compatible
 
 ## Quick Start
 
-1. Put paper Markdown files into `papers_md/`.
-2. Copy `.env.example` to `.env` and fill in `DEEPSEEK_API_KEY`.
-3. Edit `project_config/review_brief.md` for your review topic.
-4. Double-click `start_workbench.command` on macOS, or run:
+1. Double-click `start_workbench.command` on macOS, or run:
 
 ```bash
 python3 scripts/launch_workbench.py
 ```
 
-The browser workbench lets you run each step, watch progress, edit prompts, edit paper cards, upload Markdown papers, apply manual core-paper overrides, and update API settings.
+2. In the browser workbench, create a new project or select an old one.
+3. Edit the review topic and detailed review brief for that project.
+4. Upload Markdown papers into the project.
+5. Run each step from the visual workflow. Before any AI step, the workbench shows the relevant prompt and output template with a plain-language explanation, so you can edit it before running.
+
+Each project lives in its own folder under `projects/`, with independent papers, prompts, API settings, cards, screening outputs, synthesis files, evidence matrix, and drafts. Project folders are ignored by git so your paper corpus and API keys are not accidentally committed.
+
+The workbench also supports:
+
+- `查看进度` on step 2 to see whether each paper card is pending, successful, or failed.
+- `重新生成本步` to rerun the current step with `--force` and overwrite that step's existing outputs.
+- `撤回到上一步` to delete the current step and downstream outputs.
+- Batch-size control for core-paper screening.
 
 You can still run the pipeline step by step from the terminal:
 
@@ -29,14 +38,20 @@ python3 scripts/06_generate_outline.py
 python3 scripts/07_write_review.py
 ```
 
+For a specific project folder, prefix commands with `LIT_REVIEW_PROJECT_DIR`:
+
+```bash
+LIT_REVIEW_PROJECT_DIR=projects/my_project python3 scripts/01_inventory.py
+```
+
 Each script is resumable by default: existing outputs are skipped unless you pass `--force`.
 
 ## Human Review Points
 
-You can intervene between steps by editing generated outputs or the override file:
+You can intervene between steps in the browser workbench or by editing generated outputs directly:
 
-- Edit any generated card in `outputs/literature_cards/*.card.json` before screening.
-- Edit `project_config/human_overrides.json` to promote/demote core papers, add synthesis notes, outline notes, or section-specific writing instructions.
+- Edit any generated card in `projects/<project>/outputs/literature_cards/*.card.json` before screening.
+- Edit `projects/<project>/project_config/human_overrides.json` to promote/demote core papers, add synthesis notes, outline notes, or section-specific writing instructions.
 - After changing core paper overrides, run:
 
 ```bash

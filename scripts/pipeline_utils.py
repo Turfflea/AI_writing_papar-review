@@ -11,11 +11,12 @@ from urllib import error, request
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PAPERS_DIR = ROOT / "papers_md"
-CONFIG_DIR = ROOT / "project_config"
+PROJECT_ROOT = Path(os.getenv("LIT_REVIEW_PROJECT_DIR", str(ROOT))).expanduser().resolve()
+PAPERS_DIR = PROJECT_ROOT / "papers_md"
+CONFIG_DIR = PROJECT_ROOT / "project_config"
 PROMPTS_DIR = CONFIG_DIR / "prompts"
 HUMAN_OVERRIDES_PATH = CONFIG_DIR / "human_overrides.json"
-OUTPUTS_DIR = ROOT / "outputs"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 CARDS_DIR = OUTPUTS_DIR / "literature_cards"
 SCREENING_DIR = OUTPUTS_DIR / "screening"
 SYNTHESIS_DIR = OUTPUTS_DIR / "synthesis"
@@ -153,17 +154,18 @@ def render_template(template: str, values: dict[str, Any]) -> str:
 
 
 def load_dotenv(path: Path | None = None) -> None:
-    env_path = path or (ROOT / ".env")
-    if not env_path.exists():
-        return
-    for raw_line in read_text(env_path).splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    env_paths = [path] if path else [PROJECT_ROOT / ".env", ROOT / ".env"]
+    for env_path in env_paths:
+        if not env_path or not env_path.exists():
             continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        for raw_line in read_text(env_path).splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
 
 
 def completion_url(base_url: str) -> str:

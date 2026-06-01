@@ -49,12 +49,12 @@ def wait_for_server(url: str, timeout: float = 5.0) -> None:
     raise RuntimeError("Server did not become ready.")
 
 
-def wait_for_job(url: str, timeout: float = 10.0) -> dict:
+def wait_for_job(url: str, expected_step_id: str, timeout: float = 10.0) -> dict:
     started = time.time()
     last = {}
     while time.time() - started < timeout:
         last = get_json(url + "/api/job")
-        if not last.get("running"):
+        if last.get("step_id") == expected_step_id and last.get("started_at") is not None and not last.get("running"):
             return last
         time.sleep(0.2)
     raise RuntimeError(f"Job did not finish. Last state: {last}")
@@ -94,7 +94,7 @@ def main() -> None:
         assert "综述主题" in review_brief["content"], "review brief should be readable"
 
         post_json(url + "/api/run", {"step_id": "inventory", "args": ["--force"]})
-        job = wait_for_job(url)
+        job = wait_for_job(url, "inventory")
         assert job.get("returncode") == 0, job.get("log", "")
         print("Smoke test passed.")
     finally:
@@ -107,4 +107,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

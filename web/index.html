@@ -10,96 +10,124 @@
     <header class="topbar">
       <div>
         <h1>AI 文献综述工作台</h1>
-        <p id="summaryLine">正在读取项目状态...</p>
+        <p id="summaryLine">选择或新建项目后，按步骤完成一次独立综述。</p>
       </div>
       <div class="top-actions">
-        <button id="refreshBtn" class="icon-button" title="刷新状态">↻</button>
+        <select id="projectSelect" title="选择旧项目"></select>
+        <input id="newProjectName" placeholder="新项目名称" />
+        <button id="createProjectBtn">新建项目</button>
+        <button id="refreshBtn" class="icon-button" title="刷新">↻</button>
         <span id="jobBadge" class="status-badge pending">空闲</span>
       </div>
     </header>
 
     <main class="layout">
-      <section class="workflow-panel">
-        <div class="panel-heading">
-          <h2>流程</h2>
-          <label class="force-toggle"><input id="forceRun" type="checkbox" /> 重新生成</label>
-        </div>
-        <div id="steps" class="steps"></div>
-      </section>
-
-      <section class="workspace">
-        <nav class="tabs" aria-label="工作区">
-          <button data-tab="editor" class="active">文件编辑</button>
-          <button data-tab="overrides">人工介入</button>
-          <button data-tab="settings">API 设置</button>
-          <button data-tab="logs">运行日志</button>
-        </nav>
-
-        <section id="editorTab" class="tab-panel active">
-          <div class="editor-toolbar">
-            <select id="fileKind">
-              <option value="config">配置</option>
-              <option value="prompts">Prompts</option>
-              <option value="papers">文献 .md</option>
-              <option value="cards">文献卡片</option>
-              <option value="outputs">全部产出</option>
-            </select>
-            <select id="fileList"></select>
-            <button id="loadFileBtn">打开</button>
-            <button id="saveFileBtn">保存</button>
-            <button id="deleteFileBtn" class="danger">删除</button>
+      <aside class="left-panel">
+        <section class="setup-panel">
+          <div class="panel-heading">
+            <h2>项目准备</h2>
+            <span id="projectName" class="muted"></span>
           </div>
-          <div class="upload-row">
-            <input id="paperUpload" type="file" accept=".md,text/markdown,text/plain" multiple />
-            <button id="uploadBtn">导入文献</button>
-            <input id="newPaperName" placeholder="新建文献文件名.md" />
-            <button id="createPaperBtn">新建</button>
+          <label class="field-label">综述主题和详细介绍</label>
+          <textarea id="briefEditor" class="brief-editor" spellcheck="false"></textarea>
+          <div class="button-row">
+            <button id="saveBriefBtn" class="primary">保存主题</button>
+            <button id="settingsToggleBtn">API 设置</button>
           </div>
-          <div id="currentPath" class="path-line">未打开文件</div>
-          <textarea id="fileEditor" spellcheck="false"></textarea>
-        </section>
 
-        <section id="overridesTab" class="tab-panel">
-          <div class="split-grid">
-            <div>
-              <h2>核心文献人工覆盖</h2>
-              <div class="form-grid">
-                <label>文献 ID<select id="overridePaper"></select></label>
-                <label>操作<select id="overrideAction">
-                  <option value="promote_to_core">标为核心文献</option>
-                  <option value="move_to_supporting">标为辅助文献</option>
-                  <option value="move_to_peripheral">标为边缘文献</option>
-                </select></label>
-                <label>理由<input id="overrideReason" placeholder="为什么要这样调整" /></label>
-                <label>用途<input id="overrideRoles" value="methodology, findings" /></label>
-              </div>
-              <button id="addOverrideBtn">加入人工覆盖</button>
-              <button id="applyOverrideBtn">保存覆盖并应用</button>
-            </div>
-            <div>
-              <h2>覆盖文件</h2>
-              <textarea id="overrideEditor" spellcheck="false"></textarea>
-            </div>
-          </div>
-        </section>
-
-        <section id="settingsTab" class="tab-panel">
-          <div class="settings-grid">
+          <div id="settingsBox" class="settings-box hidden">
             <label>API Key<input id="apiKey" type="password" placeholder="留空则保持现有 key" /></label>
             <label>Base URL<input id="baseUrl" /></label>
             <label>Model<input id="modelName" /></label>
             <label>Temperature<input id="temperature" /></label>
             <label>Timeout 秒<input id="timeout" /></label>
+            <button id="saveSettingsBtn">保存 API 设置</button>
+            <p id="settingsHint" class="muted"></p>
           </div>
-          <button id="saveSettingsBtn">保存 API 设置</button>
-          <p id="settingsHint" class="muted"></p>
+
+          <div class="paper-import">
+            <label class="field-label">导入 Markdown 文献</label>
+            <input id="paperUpload" type="file" accept=".md,text/markdown,text/plain" multiple />
+            <button id="uploadBtn">导入文献</button>
+            <div id="paperList" class="paper-list"></div>
+          </div>
         </section>
 
-        <section id="logsTab" class="tab-panel">
+        <section class="workflow-panel">
+          <div class="panel-heading">
+            <h2>流程</h2>
+            <span class="muted">点击步骤查看说明和模板</span>
+          </div>
+          <div id="steps" class="steps"></div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <section class="step-header">
+          <div>
+            <h2 id="stepTitle">步骤</h2>
+            <p id="stepDescription"></p>
+          </div>
+          <div class="step-actions">
+            <button id="runBtn" class="primary">执行本步</button>
+            <button id="rerunBtn" title="覆盖并重新生成本步骤产出">重新生成本步</button>
+            <button id="rollbackBtn" class="danger" title="删除本步骤及后续步骤产出">撤回到上一步</button>
+            <button id="progressBtn">查看进度</button>
+          </div>
+        </section>
+
+        <section id="stepOptions" class="options-row"></section>
+
+        <section id="promptPanel" class="prompt-panel">
+          <div class="prompt-heading">
+            <div>
+              <h3>提示词和 AI 生成模板</h3>
+              <p id="promptHelp" class="muted"></p>
+            </div>
+            <select id="promptSelect"></select>
+          </div>
+          <p id="promptDescription" class="template-description"></p>
+          <textarea id="promptEditor" spellcheck="false"></textarea>
+          <div class="button-row">
+            <button id="savePromptBtn">保存模板</button>
+          </div>
+        </section>
+
+        <section class="output-panel">
+          <div class="panel-heading">
+            <h3>本步骤产出</h3>
+            <span id="outputHint" class="muted"></span>
+          </div>
+          <div class="output-grid">
+            <div id="outputList" class="output-list"></div>
+            <div class="output-viewer">
+              <div id="currentOutputPath" class="path-line">请选择一个产出文件</div>
+              <textarea id="outputEditor" spellcheck="false"></textarea>
+              <div class="button-row">
+                <button id="saveOutputBtn">保存当前产出</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="log-panel">
+          <div class="panel-heading">
+            <h3>运行日志</h3>
+            <span id="jobReturnCode" class="muted"></span>
+          </div>
           <pre id="jobLog"></pre>
         </section>
       </section>
     </main>
+
+    <dialog id="progressDialog">
+      <div class="dialog-header">
+        <h2>单篇文献卡片生成进度</h2>
+        <button id="closeProgressBtn">关闭</button>
+      </div>
+      <p id="progressSummary" class="muted"></p>
+      <div id="progressTable" class="progress-table"></div>
+    </dialog>
 
     <script src="/web/app.js"></script>
   </body>

@@ -4,4 +4,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 outputs/logs/*.jsonl
-
+projects/

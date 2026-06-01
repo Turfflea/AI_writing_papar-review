@@ -6,7 +6,7 @@ import csv
 import re
 from pathlib import Path
 
-from pipeline_utils import ROOT, OUTPUTS_DIR, ensure_dirs, list_paper_files, paper_id_from_path, read_text
+from pipeline_utils import PROJECT_ROOT, OUTPUTS_DIR, ensure_dirs, list_paper_files, paper_id_from_path, read_text
 
 
 def guess_title(text: str, path: Path) -> str:
@@ -80,7 +80,7 @@ def main() -> None:
         ocr_issue = likely_ocr_issue(text)
         row = {
             "paper_id": paper_id,
-            "file_path": str(path.relative_to(ROOT)),
+            "file_path": str(path.relative_to(PROJECT_ROOT)),
             "title_guess": title,
             "year_guess": year,
             "doi_or_url_guess": doi_or_url,
@@ -104,7 +104,7 @@ def main() -> None:
             review_rows.append(
                 {
                     "paper_id": paper_id,
-                    "file_path": str(path.relative_to(ROOT)),
+                    "file_path": str(path.relative_to(PROJECT_ROOT)),
                     "notes": "; ".join(notes),
                 }
             )
