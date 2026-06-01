@@ -4,6 +4,9 @@ import csv
 import json
 import os
 import re
+import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -22,6 +25,7 @@ CARDS_DIR = OUTPUTS_DIR / "literature_cards"
 SCREENING_DIR = OUTPUTS_DIR / "screening"
 SYNTHESIS_DIR = OUTPUTS_DIR / "synthesis"
 EVIDENCE_DIR = OUTPUTS_DIR / "evidence_index"
+OUTLINE_DIR = OUTPUTS_DIR / "outline"
 DRAFTS_DIR = OUTPUTS_DIR / "drafts"
 SECTIONS_DIR = DRAFTS_DIR / "sections"
 LOGS_DIR = OUTPUTS_DIR / "logs"
@@ -35,6 +39,7 @@ def ensure_dirs() -> None:
         SCREENING_DIR,
         SYNTHESIS_DIR,
         EVIDENCE_DIR,
+        OUTLINE_DIR,
         DRAFTS_DIR,
         SECTIONS_DIR,
         LOGS_DIR,
@@ -496,3 +501,80 @@ def read_all_markdown(paths: list[Path]) -> str:
     for path in paths:
         parts.append(f"\n\n<!-- {path.name} -->\n\n{read_text(path)}")
     return "\n".join(parts).strip()
+
+
+def reset_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def copy_files(paths: list[Path], target_dir: Path) -> list[Path]:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    copied: list[Path] = []
+    for path in paths:
+        if path.exists() and path.is_file():
+            target = target_dir / path.name
+            shutil.copy2(path, target)
+            copied.append(target)
+    return copied
+
+
+def open_terminal_at(workdir: Path) -> bool:
+    workdir.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", "-a", "Terminal", str(workdir)])
+        return True
+    if os.name == "nt":
+        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/K", "cd", "/d", str(workdir)])
+        return True
+    for terminal in ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]:
+        executable = shutil.which(terminal)
+        if not executable:
+            continue
+        if terminal == "gnome-terminal":
+            subprocess.Popen([executable, "--working-directory", str(workdir)])
+        elif terminal == "konsole":
+            subprocess.Popen([executable, "--workdir", str(workdir)])
+        elif terminal == "xfce4-terminal":
+            subprocess.Popen([executable, "--working-directory", str(workdir)])
+        else:
+            subprocess.Popen([executable], cwd=str(workdir))
+        return True
+    return False
+
+
+def agent_readme(step_title: str, agent: str, expected_outputs: list[str]) -> str:
+    outputs = "\n".join(f"- `{item}`" for item in expected_outputs)
+    agent_command = "codex" if agent == "codex" else "claude"
+    return f"""# {step_title} Agent 工作区
+
+这个文件夹是本步骤的独立输出工作区。`prompt.md` 已经把项目中的真实材料渲染进去，`input/` 里也保留了可追溯输入文件。
+
+## 操作方式
+
+1. 在当前终端中启动你选择的 Agent：
+
+```bash
+{agent_command}
+```
+
+2. 如果你没有新的想法，直接对 Agent 输入：
+
+```text
+按照项目中的.md 输出内容
+```
+
+3. 让 Agent 优先阅读 `prompt.md`，必要时再查看 `input/` 中的材料。
+4. 请把结果保存到本文件夹下的目标文件。
+
+## 本步骤目标输出
+
+{outputs}
+
+## 注意
+
+- 生成内容的自然语言应使用中文，代码、变量名、paper_id、文献题名、引用占位符和原文摘录可以保留原文语言。
+- 不要编造 `input/` 中不存在的文献信息。
+- 如果证据不足，请保留“需要回看全文确认”标记。
+"""

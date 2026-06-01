@@ -33,6 +33,10 @@ function selectedStep() {
   return appState.steps.find((step) => step.id === activeStepId) || appState.steps[0];
 }
 
+function isAgentStep(step) {
+  return Boolean(step?.agent_step);
+}
+
 async function refreshState() {
   appState = await api("/api/state");
   if (!appState.steps.some((step) => step.id === activeStepId)) activeStepId = appState.steps[0].id;
@@ -165,6 +169,11 @@ function renderStepDetail() {
   const step = selectedStep();
   $("#stepTitle").textContent = step.title;
   $("#stepDescription").textContent = step.description;
+  $("#runBtn").textContent = isAgentStep(step) ? "准备工作区并打开终端" : "执行本步";
+  $("#rerunBtn").textContent = isAgentStep(step) ? "重建本步工作区" : "重新生成本步";
+  $("#rerunBtn").title = isAgentStep(step)
+    ? "覆盖重建本步骤 prompt.md 和 input 输入材料"
+    : "覆盖并重新生成本步骤产出";
   $("#progressBtn").classList.toggle("hidden", step.id !== "cards");
   renderStepOptions(step);
   renderScreeningPanel(step);
@@ -189,6 +198,16 @@ function renderStepOptions(step) {
         <input id="screeningConcurrency" type="number" min="1" max="20" value="2" />
       </label>
       <p class="muted">这个数字决定每次给 AI 多少张文献卡片。文献多、卡片长时可调小；想减少 API 调用次数可调大。</p>
+    `;
+  } else if (isAgentStep(step)) {
+    $("#stepOptions").innerHTML = `
+      <label>终端 Agent
+        <select id="agentTool">
+          <option value="codex">Codex</option>
+          <option value="claude">Claude Code</option>
+        </select>
+      </label>
+      <p class="muted">本步不会调用 DeepSeek API。系统只准备本步骤输出文件夹并打开终端；进入终端后先启动所选 Agent。如果没有新的想法，直接输入“按照项目中的.md 输出内容”。</p>
     `;
   } else {
     $("#stepOptions").innerHTML = "";
@@ -245,6 +264,9 @@ function renderPromptPanel(step) {
   if (step.prompt_info.length > 1) {
     $("#promptHelp").textContent = `本步骤有 ${step.prompt_info.length} 个提示词模板，请在右侧下拉菜单中逐个检查并保存。`;
   }
+  if (isAgentStep(step)) {
+    $("#promptHelp").textContent = "这里编辑的是生成 Agent 工作区 prompt.md 的原始模板。执行本步后，可在“本步骤产出”中打开并继续修改渲染后的 prompt.md。";
+  }
   $("#promptSelect").innerHTML = step.prompt_info
     .map((item) => `<option value="${escapeHtml(item.path)}">${escapeHtml(item.title)}</option>`)
     .join("");
@@ -263,7 +285,7 @@ function renderOutputPanel(step) {
     ? step.output_files
         .map((file) => `<button class="output-item" data-path="${escapeHtml(file.path)}">${escapeHtml(file.path)}</button>`)
         .join("")
-    : `<p class="muted">执行本步骤后，这里会显示本步骤相关产出。</p>`;
+    : `<p class="muted">${isAgentStep(step) ? "执行本步后，这里会显示 prompt.md、README.md 和 input/ 输入材料。" : "执行本步骤后，这里会显示本步骤相关产出。"}</p>`;
   $("#outputList").querySelectorAll("[data-path]").forEach((button) => {
     button.addEventListener("click", () => openOutput(button.dataset.path));
   });
@@ -293,6 +315,10 @@ function runArgs(force = false) {
     args.push("--batch-size", value);
     const concurrency = $("#screeningConcurrency")?.value || "1";
     args.push("--concurrency", concurrency);
+  }
+  if (isAgentStep(selectedStep())) {
+    const agent = $("#agentTool")?.value || "codex";
+    args.push("--agent", agent);
   }
   return args;
 }

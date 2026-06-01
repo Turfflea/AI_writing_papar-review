@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from pipeline_utils import (
     DRAFTS_DIR,
     EVIDENCE_DIR,
+    OUTLINE_DIR,
     SCREENING_DIR,
     SECTIONS_DIR,
     SYNTHESIS_DIR,
+    agent_readme,
     card_by_id,
-    chat_completion,
+    copy_files,
     ensure_dirs,
     extract_outline_sections,
     json_dumps,
@@ -18,13 +21,13 @@ from pipeline_utils import (
     load_cards,
     load_prompt,
     load_review_brief,
-    log_event,
+    open_terminal_at,
     read_all_markdown,
     read_json,
     read_text,
     render_template,
+    reset_dir,
     review_dimensions_text,
-    slugify,
     write_text,
 )
 
@@ -53,35 +56,30 @@ def choose_sections(outline_text: str, section_title: str, section_brief: str, l
     return sections
 
 
-def merge_sections(sections: list[dict[str, str]]) -> str:
-    parts = ["# 文献综述草稿", ""]
-    for section in sections:
-        path = SECTIONS_DIR / f"{slugify(section['title'], fallback='section')}.md"
-        if path.exists():
-            parts.append(read_text(path).strip())
-            parts.append("")
-    return "\n\n".join(part for part in parts if part.strip()) + "\n"
+def outline_path() -> tuple[Path, str]:
+    preferred = OUTLINE_DIR / "review_outline.md"
+    legacy = DRAFTS_DIR / "review_outline.md"
+    if preferred.exists():
+        return preferred, read_text(preferred)
+    if legacy.exists():
+        return legacy, read_text(legacy)
+    return preferred, ""
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Write review sections from the generated outline.")
-    parser.add_argument("--section-title", default="", help="Write only one section.")
-    parser.add_argument("--section-brief", default="", help="Brief for --section-title if it is not in the outline.")
-    parser.add_argument("--limit", type=int, default=0, help="Only write the first N parsed sections.")
-    parser.add_argument("--force", action="store_true")
-    parser.add_argument("--compact-cards", action="store_true", help="Use compact core cards to reduce context.")
-    parser.add_argument("--model", default=None)
-    parser.add_argument("--temperature", type=float, default=None)
-    parser.add_argument("--max-tokens", type=int, default=None)
-    args = parser.parse_args()
-
-    ensure_dirs()
-    outline_path = DRAFTS_DIR / "review_outline.md"
+def prepare_agent_workspace(
+    section_title: str,
+    section_brief: str,
+    limit: int,
+    compact_cards: bool,
+    agent: str,
+    force: bool,
+    open_terminal: bool,
+) -> None:
+    outline_file, outline_text = outline_path()
     matrix_path = EVIDENCE_DIR / "evidence_matrix.md"
     synthesis_paths = sorted(SYNTHESIS_DIR.glob("*_synthesis.md"))
 
-    outline_text = read_text(outline_path) if outline_path.exists() else ""
-    if not outline_text and not (args.section_title and args.section_brief):
+    if not outline_text and not (section_title and section_brief):
         print("Missing review outline. Run scripts/06_generate_outline.py first, or pass --section-title and --section-brief.")
         return
     if not matrix_path.exists():
@@ -91,66 +89,100 @@ def main() -> None:
         print("Missing synthesis files. Run scripts/05_synthesize_dimensions.py first.")
         return
 
-    sections = choose_sections(outline_text, args.section_title, args.section_brief, args.limit)
-    if not sections:
-        print("No sections found in the outline.")
-        return
-
-    review_brief = load_review_brief()
-    template = load_prompt("07_section_writing.md")
-    synthesis_markdown = read_all_markdown(synthesis_paths)
-    evidence_matrix = read_text(matrix_path)
-    core_cards = load_core_cards(compact=args.compact_cards)
+    core_cards = load_core_cards(compact=compact_cards)
     if not core_cards:
         print("No core cards found. Run scripts/04_select_core_papers.py first.")
         return
 
-    for index, section in enumerate(sections, start=1):
-        title = section["title"]
-        out_path = SECTIONS_DIR / f"{slugify(title, fallback='section')}.md"
-        prompt_path = SECTIONS_DIR / f"{slugify(title, fallback='section')}.prompt.md"
-        raw_path = SECTIONS_DIR / f"{slugify(title, fallback='section')}.raw_response.md"
-        if out_path.exists() and not args.force:
-            print(f"[{index}/{len(sections)}] Skip existing section: {out_path}")
-            continue
+    sections = choose_sections(outline_text, section_title, section_brief, limit)
+    if not sections:
+        sections = [{"title": "文献综述草稿", "brief": outline_text or section_brief}]
 
-        prompt = render_template(
-            template,
-            {
-                "REVIEW_BRIEF": review_brief,
-                "REVIEW_DIMENSIONS": review_dimensions_text(),
-                "SECTION_BRIEF": section["brief"],
-                "RELEVANT_SYNTHESIS_MARKDOWN": synthesis_markdown,
-                "RELEVANT_EVIDENCE_MATRIX": evidence_matrix,
-                "RELEVANT_CORE_CARDS_JSON": json_dumps(core_cards),
-                "SECTION_NOTES": human_note_for_section(title) or "无",
-                "SECTION_TITLE": title,
-            },
+    input_dir = DRAFTS_DIR / "input"
+    reset_dir(input_dir)
+    SECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    write_text(input_dir / "review_brief.md", load_review_brief())
+    write_text(input_dir / "review_dimensions.md", review_dimensions_text() + "\n")
+    write_text(input_dir / "review_outline.md", outline_text)
+    write_text(input_dir / "outline_source.txt", str(outline_file) + "\n")
+    write_text(input_dir / "evidence_matrix.md", read_text(matrix_path))
+    write_text(input_dir / "all_synthesis.md", read_all_markdown(synthesis_paths) + "\n")
+    write_text(input_dir / "core_cards.json", json_dumps(core_cards) + "\n")
+    write_text(input_dir / "section_tasks.json", json_dumps(sections) + "\n")
+    if (SCREENING_DIR / "final_core_selection.json").exists():
+        write_text(input_dir / "final_core_selection.json", json_dumps(read_json(SCREENING_DIR / "final_core_selection.json")) + "\n")
+    copy_files(synthesis_paths, input_dir / "synthesis")
+
+    section_prompt_title = section_title or "文献综述草稿"
+    if section_title:
+        prompt_section_brief = sections[0]["brief"] if sections else section_brief
+        section_notes = human_note_for_section(section_prompt_title) or "无"
+    else:
+        prompt_section_brief = (
+            "请根据 input/review_outline.md 中的大纲逐章写作。"
+            "每个章节可以先保存到 sections/ 文件夹，最后合并为 final_review.md。"
+            "章节任务清单也已保存到 input/section_tasks.json。\n\n"
+            + (outline_text or section_brief)
         )
+        section_notes = "无"
+
+    template = load_prompt("07_section_writing.md")
+    prompt = render_template(
+        template,
+        {
+            "REVIEW_BRIEF": load_review_brief(),
+            "REVIEW_DIMENSIONS": review_dimensions_text(),
+            "SECTION_BRIEF": prompt_section_brief,
+            "RELEVANT_SYNTHESIS_MARKDOWN": read_all_markdown(synthesis_paths),
+            "RELEVANT_EVIDENCE_MATRIX": read_text(matrix_path),
+            "RELEVANT_CORE_CARDS_JSON": json_dumps(core_cards),
+            "SECTION_NOTES": section_notes,
+            "SECTION_TITLE": section_prompt_title,
+        },
+    )
+    prompt_path = DRAFTS_DIR / "prompt.md"
+    if prompt_path.exists() and not force:
+        write_text(DRAFTS_DIR / "prompt.latest.md", prompt)
+        print(f"Kept existing prompt: {prompt_path}")
+        print(f"Wrote refreshed prompt draft: {DRAFTS_DIR / 'prompt.latest.md'}")
+    else:
         write_text(prompt_path, prompt)
-        print(f"[{index}/{len(sections)}] Writing section: {title}")
-        content, meta = chat_completion(
-            prompt,
-            model=args.model,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-        )
-        write_text(raw_path, content)
-        write_text(out_path, content)
-        log_event(
-            "write_review",
-            {
-                "section_title": title,
-                "status": "ok",
-                "elapsed_seconds": meta.get("_elapsed_seconds"),
-                "output": str(out_path),
-            },
-        )
-        print(f"Wrote {out_path}")
+        print(f"Wrote prompt: {prompt_path}")
 
-    final_path = DRAFTS_DIR / "final_review.md"
-    write_text(final_path, merge_sections(sections))
-    print(f"Wrote {final_path}")
+    write_text(
+        DRAFTS_DIR / "README.md",
+        agent_readme("第 8 步：逐章写作", agent, ["sections/*.md", "final_review.md"]),
+    )
+    print(f"Prepared Agent workspace: {DRAFTS_DIR}")
+    print("Terminal will open at this folder. If you have no extra instruction, tell the Agent: 按照项目中的.md 输出内容")
+    if open_terminal:
+        if open_terminal_at(DRAFTS_DIR):
+            print("Opened terminal for Agent work.")
+        else:
+            print(f"Could not open a terminal automatically. Open one manually at: {DRAFTS_DIR}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepare the review-drafting Agent workspace.")
+    parser.add_argument("--section-title", default="", help="Write only one section.")
+    parser.add_argument("--section-brief", default="", help="Brief for --section-title if it is not in the outline.")
+    parser.add_argument("--limit", type=int, default=0, help="Only write the first N parsed sections.")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--compact-cards", action="store_true", help="Use compact core cards to reduce context.")
+    parser.add_argument("--agent", choices=["codex", "claude"], default="codex")
+    parser.add_argument("--no-open-terminal", action="store_true")
+    args = parser.parse_args()
+
+    ensure_dirs()
+    prepare_agent_workspace(
+        args.section_title,
+        args.section_brief,
+        args.limit,
+        args.compact_cards,
+        args.agent,
+        args.force,
+        not args.no_open_terminal,
+    )
 
 
 if __name__ == "__main__":

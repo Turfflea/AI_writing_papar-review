@@ -71,25 +71,31 @@ STEP_DEFS = [
         "id": "evidence",
         "title": "6. 证据矩阵",
         "script": "05_evidence_matrix.py",
-        "description": "把文献卡片和综合结果整理成可追溯的证据矩阵。",
-        "outputs": ["outputs/evidence_index/evidence_matrix.md", "outputs/evidence_index/evidence_matrix.csv"],
+        "description": "准备证据矩阵 Agent 工作区，写入真实输入材料和 prompt.md，并打开终端让你选择 Claude Code 或 Codex 完成输出。",
+        "outputs": ["outputs/evidence_index"],
+        "required_outputs": ["outputs/evidence_index/evidence_matrix.md"],
         "prompt_files": ["project_config/prompts/05_evidence_matrix.md"],
+        "agent_step": True,
     },
     {
         "id": "outline",
         "title": "7. 综述大纲",
         "script": "06_generate_outline.py",
-        "description": "根据筛选结果、综合文件和证据矩阵生成问题化综述大纲。",
-        "outputs": ["outputs/drafts/review_outline.md"],
+        "description": "准备综述大纲 Agent 工作区，使用筛选结果、综合文件和证据矩阵生成 prompt.md，并打开终端继续写作。",
+        "outputs": ["outputs/outline"],
+        "required_outputs": ["outputs/outline/review_outline.md"],
         "prompt_files": ["project_config/prompts/06_outline_generation.md"],
+        "agent_step": True,
     },
     {
         "id": "draft",
         "title": "8. 逐章写作",
         "script": "07_write_review.py",
-        "description": "按大纲逐章写作，并合并成最终草稿。",
-        "outputs": ["outputs/drafts/sections", "outputs/drafts/final_review.md"],
+        "description": "准备逐章写作 Agent 工作区，放入大纲、证据矩阵、核心卡片和 prompt.md，并打开终端让 Agent 写出正文草稿。",
+        "outputs": ["outputs/drafts"],
+        "required_outputs": ["outputs/drafts/final_review.md"],
         "prompt_files": ["project_config/prompts/07_section_writing.md"],
+        "agent_step": True,
     },
 ]
 
@@ -112,15 +118,15 @@ PROMPT_DESCRIPTIONS = {
     },
     "project_config/prompts/05_evidence_matrix.md": {
         "title": "证据矩阵模板",
-        "description": "控制 AI 如何把文献卡片和综合结论整理为可追溯证据表。",
+        "description": "控制第 6 步生成的 Agent prompt.md 如何把文献卡片和综合结论整理为可追溯证据表。",
     },
     "project_config/prompts/06_outline_generation.md": {
         "title": "综述大纲模板",
-        "description": "控制 AI 如何把筛选、综合和证据矩阵转化为正式综述大纲。",
+        "description": "控制第 7 步生成的 Agent prompt.md 如何把筛选、综合和证据矩阵转化为正式综述大纲。",
     },
     "project_config/prompts/07_section_writing.md": {
         "title": "逐章正文写作模板",
-        "description": "控制 AI 如何根据某个章节任务、证据矩阵和核心文献卡片写出正式中文综述正文。",
+        "description": "控制第 8 步生成的 Agent prompt.md 如何根据章节任务、证据矩阵和核心文献卡片写出正式中文综述正文。",
     },
 }
 
@@ -212,6 +218,7 @@ def ensure_project(project_id: str, display_name: str | None = None) -> Path:
         base / "outputs" / "screening",
         base / "outputs" / "synthesis",
         base / "outputs" / "evidence_index",
+        base / "outputs" / "outline",
         base / "outputs" / "drafts" / "sections",
         base / "outputs" / "logs",
     ]:
@@ -322,10 +329,11 @@ def output_path_done(project_root: Path, relative_path: str) -> bool:
 
 
 def step_status(step: dict[str, Any], project_root: Path) -> str:
-    outputs = step["outputs"]
-    if all(output_path_done(project_root, path) for path in outputs):
+    required_outputs = step.get("required_outputs") or step["outputs"]
+    visible_outputs = list(dict.fromkeys([*step["outputs"], *required_outputs]))
+    if all(output_path_done(project_root, path) for path in required_outputs):
         return "done"
-    if any(output_path_done(project_root, path) for path in outputs):
+    if any(output_path_done(project_root, path) for path in visible_outputs):
         return "partial"
     return "pending"
 
@@ -560,7 +568,7 @@ def state() -> dict[str, Any]:
                 "status": step_status(step, project_root),
                 "outputs": [
                     {"path": path, "exists": output_path_done(project_root, path)}
-                    for path in step["outputs"]
+                    for path in step.get("required_outputs", step["outputs"])
                 ],
                 "prompt_info": prompt_info_for_step(step, project_root),
                 "output_files": list_outputs_for_step(project_root, step["id"]),

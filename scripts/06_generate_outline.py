@@ -4,40 +4,29 @@ from __future__ import annotations
 import argparse
 
 from pipeline_utils import (
-    DRAFTS_DIR,
     EVIDENCE_DIR,
+    OUTLINE_DIR,
     SCREENING_DIR,
     SYNTHESIS_DIR,
-    chat_completion,
+    agent_readme,
+    copy_files,
     ensure_dirs,
     json_dumps,
     load_prompt,
     load_review_brief,
-    log_event,
     outline_human_notes,
+    open_terminal_at,
     read_all_markdown,
     read_json,
     read_text,
     render_template,
+    reset_dir,
     review_dimensions_text,
     write_text,
 )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate a review outline from synthesis and evidence.")
-    parser.add_argument("--force", action="store_true")
-    parser.add_argument("--model", default=None)
-    parser.add_argument("--temperature", type=float, default=None)
-    parser.add_argument("--max-tokens", type=int, default=None)
-    args = parser.parse_args()
-
-    ensure_dirs()
-    outline_path = DRAFTS_DIR / "review_outline.md"
-    if outline_path.exists() and not args.force:
-        print(f"Skip existing outline: {outline_path}")
-        return
-
+def prepare_agent_workspace(agent: str, force: bool, open_terminal: bool) -> None:
     selection_path = SCREENING_DIR / "final_core_selection.json"
     matrix_path = EVIDENCE_DIR / "evidence_matrix.md"
     synthesis_paths = sorted(SYNTHESIS_DIR.glob("*_synthesis.md"))
@@ -55,12 +44,21 @@ def main() -> None:
             print(f"- {item}")
         return
 
-    review_brief = load_review_brief()
+    input_dir = OUTLINE_DIR / "input"
+    reset_dir(input_dir)
+    write_text(input_dir / "review_brief.md", load_review_brief())
+    write_text(input_dir / "review_dimensions.md", review_dimensions_text() + "\n")
+    write_text(input_dir / "final_core_selection.json", json_dumps(read_json(selection_path)) + "\n")
+    write_text(input_dir / "all_synthesis.md", read_all_markdown(synthesis_paths) + "\n")
+    write_text(input_dir / "evidence_matrix.md", read_text(matrix_path))
+    write_text(input_dir / "outline_notes.md", (outline_human_notes() or "无") + "\n")
+    copy_files(synthesis_paths, input_dir / "synthesis")
+
     template = load_prompt("06_outline_generation.md")
     prompt = render_template(
         template,
         {
-            "REVIEW_BRIEF": review_brief,
+            "REVIEW_BRIEF": load_review_brief(),
             "REVIEW_DIMENSIONS": review_dimensions_text(),
             "FINAL_CORE_SELECTION_JSON": json_dumps(read_json(selection_path)),
             "ALL_SYNTHESIS_MARKDOWN": read_all_markdown(synthesis_paths),
@@ -68,23 +66,37 @@ def main() -> None:
             "OUTLINE_NOTES": outline_human_notes() or "无",
         },
     )
-    prompt_path = DRAFTS_DIR / "review_outline.prompt.md"
-    raw_path = DRAFTS_DIR / "review_outline.raw_response.md"
-    write_text(prompt_path, prompt)
-    print("Generating review outline")
-    content, meta = chat_completion(
-        prompt,
-        model=args.model,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
+    prompt_path = OUTLINE_DIR / "prompt.md"
+    if prompt_path.exists() and not force:
+        write_text(OUTLINE_DIR / "prompt.latest.md", prompt)
+        print(f"Kept existing prompt: {prompt_path}")
+        print(f"Wrote refreshed prompt draft: {OUTLINE_DIR / 'prompt.latest.md'}")
+    else:
+        write_text(prompt_path, prompt)
+        print(f"Wrote prompt: {prompt_path}")
+
+    write_text(
+        OUTLINE_DIR / "README.md",
+        agent_readme("第 7 步：综述大纲", agent, ["review_outline.md"]),
     )
-    write_text(raw_path, content)
-    write_text(outline_path, content)
-    log_event(
-        "generate_outline",
-        {"status": "ok", "elapsed_seconds": meta.get("_elapsed_seconds"), "output": str(outline_path)},
-    )
-    print(f"Wrote {outline_path}")
+    print(f"Prepared Agent workspace: {OUTLINE_DIR}")
+    print("Terminal will open at this folder. If you have no extra instruction, tell the Agent: 按照项目中的.md 输出内容")
+    if open_terminal:
+        if open_terminal_at(OUTLINE_DIR):
+            print("Opened terminal for Agent work.")
+        else:
+            print(f"Could not open a terminal automatically. Open one manually at: {OUTLINE_DIR}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Prepare the review-outline Agent workspace.")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--agent", choices=["codex", "claude"], default="codex")
+    parser.add_argument("--no-open-terminal", action="store_true")
+    args = parser.parse_args()
+
+    ensure_dirs()
+    prepare_agent_workspace(args.agent, args.force, not args.no_open_terminal)
 
 
 if __name__ == "__main__":

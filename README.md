@@ -2,6 +2,7 @@
 
 This project turns a folder of Markdown papers into a structured literature review workflow.
 It is designed for Chinese academic review writing and uses an OpenAI-compatible DeepSeek API by default.
+Steps 6-8 use a local Agent workspace instead of one large API request, so Claude Code or Codex can inspect files from the step output folder.
 
 ## Quick Start
 
@@ -24,6 +25,7 @@ The workbench also supports:
 - `重新生成本步` to rerun the current step with `--force` and overwrite that step's existing outputs.
 - `撤回到上一步` to delete the current step and downstream outputs.
 - Batch-size control for core-paper screening.
+- Agent mode for steps 6-8. The app prepares `prompt.md` plus an `input/` folder in the step output directory, opens a terminal there, and lets you choose Claude Code or Codex.
 
 You can still run the pipeline step by step from the terminal:
 
@@ -60,13 +62,42 @@ python3 scripts/04_select_core_papers.py --apply-overrides-only
 
 Later scripts read `project_config/human_overrides.json`, so manual decisions are preserved and visible.
 
+## Agent Steps
+
+Steps 1-5 still call the configured API. Steps 6-8 prepare a local workspace and open a terminal instead:
+
+- Step 6 uses `outputs/evidence_index/` and expects `evidence_matrix.md`.
+- Step 7 uses `outputs/outline/` and expects `review_outline.md`.
+- Step 8 uses `outputs/drafts/` and expects `sections/*.md` plus `final_review.md`.
+
+After the terminal opens, start your chosen Agent:
+
+```bash
+codex
+```
+
+or:
+
+```bash
+claude
+```
+
+If you have no extra instruction, tell the Agent:
+
+```text
+按照项目中的.md 输出内容
+```
+
+The generated `prompt.md` contains rendered real project content, and the `input/` folder keeps the same materials as separate files for targeted reading.
+
 ## Main Outputs
 
 - `outputs/literature_cards/`: one structured card per paper, in JSON and Markdown.
 - `outputs/screening/`: batch screening and final core paper selection.
 - `outputs/synthesis/`: cross-paper synthesis by dimension.
-- `outputs/evidence_index/`: evidence matrix for traceable claims.
-- `outputs/drafts/`: review outline, section drafts, and final merged draft.
+- `outputs/evidence_index/`: step 6 Agent workspace and evidence matrix.
+- `outputs/outline/`: step 7 Agent workspace and review outline.
+- `outputs/drafts/`: step 8 Agent workspace, section drafts, and final merged draft.
 
 ## Useful Commands
 
