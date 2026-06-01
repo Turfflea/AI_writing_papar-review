@@ -102,6 +102,7 @@ def validate_card(card: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Check generated literature cards for completeness.")
     parser.add_argument("--fail-on-issues", action="store_true", help="Exit with code 1 if issues are found.")
+    parser.add_argument("--force", action="store_true", help="Accepted for UI compatibility; quality reports are always regenerated.")
     args = parser.parse_args()
 
     ensure_dirs()
@@ -144,4 +145,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

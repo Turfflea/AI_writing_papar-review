@@ -59,6 +59,7 @@ def likely_ocr_issue(text: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create an inventory of Markdown papers.")
+    parser.add_argument("--force", action="store_true", help="Accepted for UI compatibility; inventory is always regenerated.")
     parser.parse_args()
 
     ensure_dirs()
