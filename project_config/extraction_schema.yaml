@@ -1,0 +1,53 @@
+paper_id: string
+bibliographic_info:
+  title: string
+  authors: list[string]
+  year: string
+  journal_or_source: string
+  doi_or_url: string
+  metadata_confidence: high | medium | low
+research_problem:
+  summary: string
+  fit_to_review_topic: high | medium | low
+  fit_reason: string
+theoretical_perspective:
+  theories_or_concepts: list[string]
+  summary: string
+  evidence_quotes: list[string]
+methodology:
+  method_type: qualitative | quantitative | mixed | conceptual | review | other | uncertain
+  specific_methods: list[string]
+  data_sources: list[string]
+  sample_or_cases: string
+  research_context: string
+  time_period: string
+  method_strengths: list[string]
+  method_limitations: list[string]
+  evidence_quotes: list[string]
+main_findings:
+  - finding: string
+    mechanism_or_explanation: string
+    boundary_conditions: string
+    evidence_quote: string
+    relevance_to_review: high | medium | low
+key_concepts:
+  - concept: string
+    definition_or_usage: string
+    evidence_quote: string
+contribution_to_review:
+  can_support_sections: list[string]
+  unique_value: string
+  possible_use_in_review: string
+limitations_and_future_research:
+  authors_stated_limitations: list[string]
+  authors_stated_future_research: list[string]
+  reviewer_observed_limitations: list[string]
+screening_scores:
+  topic_relevance_1_to_5: integer
+  methodological_value_1_to_5: integer
+  finding_value_1_to_5: integer
+  theoretical_value_1_to_5: integer
+  overall_core_candidate_1_to_5: integer
+uncertainties: list[string]
+one_sentence_summary: string
+
