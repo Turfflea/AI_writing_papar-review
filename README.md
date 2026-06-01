@@ -8,7 +8,15 @@ It is designed for Chinese academic review writing and uses an OpenAI-compatible
 1. Put paper Markdown files into `papers_md/`.
 2. Copy `.env.example` to `.env` and fill in `DEEPSEEK_API_KEY`.
 3. Edit `project_config/review_brief.md` for your review topic.
-4. Run the pipeline step by step:
+4. Double-click `start_workbench.command` on macOS, or run:
+
+```bash
+python3 scripts/launch_workbench.py
+```
+
+The browser workbench lets you run each step, watch progress, edit prompts, edit paper cards, upload Markdown papers, apply manual core-paper overrides, and update API settings.
+
+You can still run the pipeline step by step from the terminal:
 
 ```bash
 python3 scripts/01_inventory.py
