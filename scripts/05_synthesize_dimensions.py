@@ -11,12 +11,14 @@ from pipeline_utils import (
     ensure_dirs,
     json_dumps,
     human_note_for_dimension,
+    load_review_dimensions,
     load_cards,
     load_prompt,
     load_review_brief,
     log_event,
     read_json,
     render_template,
+    review_dimensions_text,
     write_text,
 )
 
@@ -97,7 +99,7 @@ def main() -> None:
     ensure_dirs()
     review_brief = load_review_brief()
     template = load_prompt("04_dimension_synthesis.md")
-    dimensions = args.dimension or list(DIMENSION_INSTRUCTIONS.keys())
+    dimensions = args.dimension or load_review_dimensions()
     cards_by_id = card_by_id(compact=args.compact)
 
     if not cards_by_id:
@@ -140,6 +142,7 @@ def main() -> None:
             template,
             {
                 "REVIEW_BRIEF": review_brief,
+                "REVIEW_DIMENSIONS": review_dimensions_text(),
                 "DIMENSION": dimension,
                 "DIMENSION_INSTRUCTION": instruction,
                 "HUMAN_NOTES": human_note_for_dimension(dimension) or "无",

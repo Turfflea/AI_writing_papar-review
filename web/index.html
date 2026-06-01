@@ -30,6 +30,14 @@
           </div>
           <label class="field-label">综述主题和详细介绍</label>
           <textarea id="briefEditor" class="brief-editor" spellcheck="false"></textarea>
+          <div class="dimension-box">
+            <div class="panel-heading compact-heading">
+              <h3>本项目要综合的维度</h3>
+              <span class="muted">会影响核心筛选和跨文献综合</span>
+            </div>
+            <div id="dimensionList" class="dimension-list"></div>
+            <button id="saveDimensionsBtn">保存维度</button>
+          </div>
           <div class="button-row">
             <button id="saveBriefBtn" class="primary">保存主题</button>
             <button id="settingsToggleBtn">API 设置</button>
@@ -77,6 +85,14 @@
         </section>
 
         <section id="stepOptions" class="options-row"></section>
+
+        <section id="screeningPanel" class="screening-panel hidden">
+          <div class="panel-heading">
+            <h3>核心文献筛选结果</h3>
+            <span class="muted">执行第四步后会在这里按层级展示</span>
+          </div>
+          <div id="screeningGroups" class="screening-groups"></div>
+        </section>
 
         <section id="promptPanel" class="prompt-panel">
           <div class="prompt-heading">
@@ -132,4 +148,3 @@
     <script src="/web/app.js"></script>
   </body>
 </html>
-

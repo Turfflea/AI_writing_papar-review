@@ -19,6 +19,7 @@ from pipeline_utils import (
     read_json,
     read_text,
     render_template,
+    review_dimensions_text,
     write_text,
 )
 
@@ -60,6 +61,7 @@ def main() -> None:
         template,
         {
             "REVIEW_BRIEF": review_brief,
+            "REVIEW_DIMENSIONS": review_dimensions_text(),
             "FINAL_CORE_SELECTION_JSON": json_dumps(read_json(selection_path)),
             "ALL_SYNTHESIS_MARKDOWN": read_all_markdown(synthesis_paths),
             "EVIDENCE_MATRIX_MARKDOWN": read_text(matrix_path),

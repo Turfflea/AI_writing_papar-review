@@ -4,6 +4,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。证据矩阵应优先覆盖这些维度：
+
+{{REVIEW_DIMENSIONS}}
+
 文献卡片如下：
 
 {{LITERATURE_CARDS_JSON}}

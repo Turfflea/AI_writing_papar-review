@@ -221,7 +221,7 @@ def ensure_project(project_id: str, display_name: str | None = None) -> Path:
     prompts_dir = config_dir / "prompts"
     if not (config_dir / "review_brief.md").exists():
         write_text(config_dir / "review_brief.md", default_review_brief(display_name or project_id))
-    for name in ["extraction_schema.yaml", "human_overrides.json"]:
+    for name in ["extraction_schema.yaml", "human_overrides.json", "review_dimensions.json"]:
         src = TEMPLATE_CONFIG_DIR / name
         dst = config_dir / name
         if src.exists() and not dst.exists():
@@ -363,7 +363,7 @@ def card_progress(project_root: Path) -> dict[str, Any]:
         elif paper_id in errors or raw_path.exists():
             status = "failed"
         elif prompt_path.exists():
-            status = "prompted"
+            status = "submitted"
         else:
             status = "pending"
         rows.append(
@@ -399,7 +399,7 @@ def card_progress(project_root: Path) -> dict[str, Any]:
         "success": sum(1 for row in rows if row["status"] == "success"),
         "failed": sum(1 for row in rows if row["status"] == "failed"),
         "pending": sum(1 for row in rows if row["status"] == "pending"),
-        "prompted": sum(1 for row in rows if row["status"] == "prompted"),
+        "submitted": sum(1 for row in rows if row["status"] == "submitted"),
     }
     return {"counts": counts, "papers": rows}
 
@@ -416,6 +416,21 @@ def selection_counts(project_root: Path) -> dict[str, int]:
         "core": len(data.get("final_core_papers", [])),
         "supporting": len(data.get("supporting_papers", [])),
         "peripheral": len(data.get("peripheral_papers", [])),
+    }
+
+
+def screening_results(project_root: Path) -> dict[str, list[dict[str, Any]]]:
+    path = project_root / "outputs" / "screening" / "final_core_selection.json"
+    if not path.exists():
+        return {"core": [], "supporting": [], "peripheral": []}
+    try:
+        data = read_json(path)
+    except Exception:
+        return {"core": [], "supporting": [], "peripheral": []}
+    return {
+        "core": data.get("final_core_papers", []),
+        "supporting": data.get("supporting_papers", []),
+        "peripheral": data.get("peripheral_papers", []),
     }
 
 
@@ -462,6 +477,37 @@ def write_env_settings(project_root: Path, data: dict[str, Any]) -> None:
         if value or env_key != "DEEPSEEK_API_KEY":
             existing[env_key] = value
     write_text(env_path, "\n".join(f"{key}={value}" for key, value in existing.items()) + "\n")
+
+
+def review_dimensions(project_root: Path) -> dict[str, Any]:
+    path = project_root / "project_config" / "review_dimensions.json"
+    default = {
+        "available_dimensions": ["研究方法", "研究发现", "理论视角", "研究情境", "研究缺口"],
+        "selected_dimensions": ["研究方法", "研究发现", "理论视角", "研究情境", "研究缺口"],
+    }
+    if not path.exists():
+        write_text(path, json.dumps(default, ensure_ascii=False, indent=2))
+        return default
+    try:
+        data = read_json(path)
+    except Exception:
+        return default
+    if not isinstance(data, dict):
+        return default
+    data.setdefault("available_dimensions", default["available_dimensions"])
+    data.setdefault("selected_dimensions", default["selected_dimensions"])
+    return data
+
+
+def write_review_dimensions(project_root: Path, selected: list[str]) -> dict[str, Any]:
+    current = review_dimensions(project_root)
+    available = [str(item) for item in current.get("available_dimensions", [])]
+    cleaned = [item for item in selected if item in available]
+    if not cleaned:
+        cleaned = ["研究方法"]
+    current["selected_dimensions"] = cleaned
+    write_text(project_root / "project_config" / "review_dimensions.json", json.dumps(current, ensure_ascii=False, indent=2))
+    return current
 
 
 def list_outputs_for_step(project_root: Path, step_id: str) -> list[dict[str, Any]]:
@@ -532,6 +578,8 @@ def state() -> dict[str, Any]:
             **selection_counts(project_root),
         },
         "settings": env_settings(project_root),
+        "dimensions": review_dimensions(project_root),
+        "screening_results": screening_results(project_root),
         "card_progress": progress,
         "job": current_job,
     }
@@ -656,6 +704,8 @@ class Handler(BaseHTTPRequestHandler):
                 json_response(self, {"files": list_named_files(active_project_dir(), kind)})
             elif path == "/api/settings":
                 json_response(self, env_settings(active_project_dir()))
+            elif path == "/api/dimensions":
+                json_response(self, review_dimensions(active_project_dir()))
             else:
                 json_response(self, {"error": "Not found."}, HTTPStatus.NOT_FOUND)
         except Exception as exc:
@@ -694,6 +744,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/settings":
                 write_env_settings(active_project_dir(), data)
                 json_response(self, {"ok": True, "settings": env_settings(active_project_dir())})
+            elif path == "/api/dimensions":
+                selected = data.get("selected_dimensions", [])
+                if not isinstance(selected, list):
+                    selected = []
+                dimensions = write_review_dimensions(active_project_dir(), [str(item) for item in selected])
+                json_response(self, {"ok": True, "dimensions": dimensions})
             elif path == "/api/run":
                 step_id = str(data.get("step_id", ""))
                 if step_id not in RUNNABLE_STEPS:

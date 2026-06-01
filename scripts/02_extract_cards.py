@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from pipeline_utils import (
@@ -13,6 +14,7 @@ from pipeline_utils import (
     extract_json_object,
     load_prompt,
     load_review_brief,
+    review_dimensions_text,
     log_event,
     paper_id_from_path,
     read_text,
@@ -44,6 +46,7 @@ def main() -> None:
     parser.add_argument("--model", default=None, help="Override DEEPSEEK_MODEL.")
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--concurrency", type=int, default=1, help="Number of papers to submit to the API at the same time.")
     parser.add_argument(
         "--max-chars",
         type=int,
@@ -68,7 +71,7 @@ def main() -> None:
         print("No Markdown papers found in papers_md/.")
         return
 
-    for index, path in enumerate(papers, start=1):
+    def process_paper(index: int, path: Path) -> tuple[str, bool, str]:
         paper_id = paper_id_from_path(path)
         json_path = CARDS_DIR / f"{paper_id}.card.json"
         md_path = CARDS_DIR / f"{paper_id}.card.md"
@@ -76,25 +79,26 @@ def main() -> None:
         prompt_path = CARDS_DIR / f"{paper_id}.prompt.md"
 
         if json_path.exists() and not args.force and not args.dry_run:
-            print(f"[{index}/{len(papers)}] Skip existing card: {paper_id}")
-            continue
+            return paper_id, True, f"[{index}/{len(papers)}] Skip existing card: {paper_id}"
 
         paper_markdown = maybe_truncate(read_text(path), args.max_chars)
         prompt = render_template(
             template,
             {
                 "REVIEW_BRIEF": review_brief,
+                "REVIEW_DIMENSIONS": review_dimensions_text(),
                 "PAPER_MARKDOWN": paper_markdown,
                 "PAPER_ID": paper_id,
             },
         )
+        write_text(prompt_path, prompt)
 
         if args.dry_run:
-            write_text(prompt_path, prompt)
-            print(f"[{index}/{len(papers)}] Wrote dry-run prompt: {prompt_path}")
-            continue
+            return paper_id, True, f"[{index}/{len(papers)}] Wrote dry-run prompt: {prompt_path}"
 
         print(f"[{index}/{len(papers)}] Extracting card: {paper_id}")
+        raw_path.unlink(missing_ok=True)
+        log_event("extract_cards", {"paper_id": paper_id, "status": "submitted", "prompt": str(prompt_path)})
         try:
             content, meta = chat_completion(
                 prompt,
@@ -119,13 +123,38 @@ def main() -> None:
                     "output": str(json_path),
                 },
             )
+            return paper_id, True, f"[{index}/{len(papers)}] Extracted card: {paper_id}"
         except Exception as exc:
             log_event("extract_cards", {"paper_id": paper_id, "status": "error", "error": str(exc)})
-            print(f"ERROR extracting {paper_id}: {exc}")
-            if args.stop_on_error:
-                raise
+            return paper_id, False, f"ERROR extracting {paper_id}: {exc}"
+
+    concurrency = max(1, args.concurrency)
+    failures: list[str] = []
+    if concurrency == 1 or len(papers) <= 1:
+        for index, path in enumerate(papers, start=1):
+            paper_id, ok, message = process_paper(index, path)
+            print(message)
+            if not ok:
+                failures.append(paper_id)
+                if args.stop_on_error:
+                    raise RuntimeError(message)
+    else:
+        print(f"Processing {len(papers)} papers with concurrency={concurrency}")
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            futures = {
+                executor.submit(process_paper, index, path): path
+                for index, path in enumerate(papers, start=1)
+            }
+            for future in as_completed(futures):
+                paper_id, ok, message = future.result()
+                print(message)
+                if not ok:
+                    failures.append(paper_id)
+                    if args.stop_on_error:
+                        raise RuntimeError(message)
+    if failures:
+        print(f"Finished with {len(failures)} failed papers: {', '.join(failures)}")
 
 
 if __name__ == "__main__":
     main()
-

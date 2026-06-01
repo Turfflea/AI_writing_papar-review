@@ -4,6 +4,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。正文写作应优先围绕这些维度展开：
+
+{{REVIEW_DIMENSIONS}}
+
 当前章节任务：
 
 {{SECTION_BRIEF}}

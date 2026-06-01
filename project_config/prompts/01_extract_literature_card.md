@@ -14,6 +14,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。提取内容时请优先服务这些维度，不要额外扩展无关维度：
+
+{{REVIEW_DIMENSIONS}}
+
 文献全文如下：
 
 {{PAPER_MARKDOWN}}

@@ -44,6 +44,7 @@ function renderAll() {
   renderProjectBar();
   renderSummary();
   renderBrief();
+  renderDimensions();
   renderSettings();
   renderPapers();
   renderSteps();
@@ -83,6 +84,22 @@ function renderSettings() {
     : "尚未配置 API Key";
 }
 
+function renderDimensions() {
+  const box = $("#dimensionList");
+  const dimensions = appState.dimensions || { available_dimensions: [], selected_dimensions: [] };
+  const selected = new Set(dimensions.selected_dimensions || []);
+  box.innerHTML = (dimensions.available_dimensions || [])
+    .map(
+      (dimension) => `
+        <label class="dimension-option">
+          <input type="checkbox" value="${escapeHtml(dimension)}" ${selected.has(dimension) ? "checked" : ""} />
+          <span>${escapeHtml(dimension)}</span>
+        </label>
+      `,
+    )
+    .join("");
+}
+
 function renderPapers() {
   const progress = appState.card_progress;
   if (!progress.papers.length) {
@@ -110,6 +127,7 @@ function statusLabel(status) {
     failed: "失败",
     pending: "未开始",
     prompted: "已生成提示词",
+    submitted: "已提交",
     done: "已完成",
     partial: "部分完成",
     imported: "已导入",
@@ -149,21 +167,71 @@ function renderStepDetail() {
   $("#stepDescription").textContent = step.description;
   $("#progressBtn").classList.toggle("hidden", step.id !== "cards");
   renderStepOptions(step);
+  renderScreeningPanel(step);
   renderPromptPanel(step);
   renderOutputPanel(step);
 }
 
 function renderStepOptions(step) {
-  if (step.id === "screening") {
+  if (step.id === "cards") {
+    $("#stepOptions").innerHTML = `
+      <label>单篇卡片生成并发数
+        <input id="cardConcurrency" type="number" min="1" max="20" value="3" />
+      </label>
+      <p class="muted">并发数越高越快，但也更容易触发 API 限流。建议先用 2-5。</p>
+    `;
+  } else if (step.id === "screening") {
     $("#stepOptions").innerHTML = `
       <label>核心文献筛选批大小
         <input id="batchSize" type="number" min="2" max="50" value="10" />
+      </label>
+      <label>初筛批次并发数
+        <input id="screeningConcurrency" type="number" min="1" max="20" value="2" />
       </label>
       <p class="muted">这个数字决定每次给 AI 多少张文献卡片。文献多、卡片长时可调小；想减少 API 调用次数可调大。</p>
     `;
   } else {
     $("#stepOptions").innerHTML = "";
   }
+}
+
+function renderScreeningPanel(step) {
+  const panel = $("#screeningPanel");
+  if (step.id !== "screening") {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const groups = appState.screening_results || { core: [], supporting: [], peripheral: [] };
+  const config = [
+    ["core", "核心文献", "core_reason"],
+    ["supporting", "辅助文献", "supporting_reason"],
+    ["peripheral", "边缘文献", "reason"],
+  ];
+  $("#screeningGroups").innerHTML = config
+    .map(([key, title, reasonKey]) => {
+      const rows = groups[key] || [];
+      return `
+        <section class="screening-group">
+          <h4>${title} <span>${rows.length}</span></h4>
+          ${
+            rows.length
+              ? rows
+                  .map(
+                    (row) => `
+                      <article class="screening-item">
+                        <strong>${escapeHtml(row.paper_id || "")}</strong>
+                        <p>${escapeHtml(row[reasonKey] || row.reason || "")}</p>
+                      </article>
+                    `,
+                  )
+                  .join("")
+              : `<p class="muted">暂无结果</p>`
+          }
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function renderPromptPanel(step) {
@@ -174,6 +242,9 @@ function renderPromptPanel(step) {
   }
   panel.classList.remove("hidden");
   $("#promptHelp").textContent = "执行本步骤前，请确认这里的提示词和 AI 生成模板符合本项目目标。";
+  if (step.prompt_info.length > 1) {
+    $("#promptHelp").textContent = `本步骤有 ${step.prompt_info.length} 个提示词模板，请在右侧下拉菜单中逐个检查并保存。`;
+  }
   $("#promptSelect").innerHTML = step.prompt_info
     .map((item) => `<option value="${escapeHtml(item.path)}">${escapeHtml(item.title)}</option>`)
     .join("");
@@ -213,20 +284,27 @@ async function openOutput(path) {
 function runArgs(force = false) {
   const args = [];
   if (force) args.push("--force");
+  if (activeStepId === "cards") {
+    const value = $("#cardConcurrency")?.value || "1";
+    args.push("--concurrency", value);
+  }
   if (activeStepId === "screening") {
     const value = $("#batchSize")?.value || "10";
     args.push("--batch-size", value);
+    const concurrency = $("#screeningConcurrency")?.value || "1";
+    args.push("--concurrency", concurrency);
   }
   return args;
 }
 
 async function runStep(force = false) {
+  const args = runArgs(force);
   if (stepIdsWithPrompt.has(activeStepId)) {
     await savePrompt();
   }
   await api("/api/run", {
     method: "POST",
-    body: JSON.stringify({ step_id: activeStepId, args: runArgs(force) }),
+    body: JSON.stringify({ step_id: activeStepId, args }),
   });
   await refreshState();
 }
@@ -245,6 +323,15 @@ async function saveBrief() {
   await api("/api/file", {
     method: "POST",
     body: JSON.stringify({ path: "project_config/review_brief.md", content: $("#briefEditor").value }),
+  });
+  await refreshState();
+}
+
+async function saveDimensions() {
+  const selected = Array.from($("#dimensionList").querySelectorAll("input:checked")).map((input) => input.value);
+  await api("/api/dimensions", {
+    method: "POST",
+    body: JSON.stringify({ selected_dimensions: selected }),
   });
   await refreshState();
 }
@@ -319,7 +406,7 @@ async function saveSettings() {
 
 async function showCardProgress() {
   const progress = await api("/api/card-progress");
-  $("#progressSummary").textContent = `总计 ${progress.counts.total} 篇；成功 ${progress.counts.success}，失败 ${progress.counts.failed}，未开始 ${progress.counts.pending}，已生成提示词 ${progress.counts.prompted}。`;
+  $("#progressSummary").textContent = `总计 ${progress.counts.total} 篇；成功 ${progress.counts.success}，失败 ${progress.counts.failed}，已提交 ${progress.counts.submitted || 0}，未开始 ${progress.counts.pending}。`;
   $("#progressTable").innerHTML = `
     <table>
       <thead><tr><th>文献</th><th>状态</th><th>卡片</th><th>错误</th></tr></thead>
@@ -366,6 +453,7 @@ $("#refreshBtn").addEventListener("click", refreshState);
 $("#createProjectBtn").addEventListener("click", createProject);
 $("#projectSelect").addEventListener("change", selectProject);
 $("#saveBriefBtn").addEventListener("click", saveBrief);
+$("#saveDimensionsBtn").addEventListener("click", saveDimensions);
 $("#settingsToggleBtn").addEventListener("click", () => $("#settingsBox").classList.toggle("hidden"));
 $("#saveSettingsBtn").addEventListener("click", saveSettings);
 $("#uploadBtn").addEventListener("click", uploadPapers);

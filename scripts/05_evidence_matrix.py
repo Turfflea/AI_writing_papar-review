@@ -23,6 +23,7 @@ from pipeline_utils import (
     read_all_markdown,
     read_json,
     render_template,
+    review_dimensions_text,
     write_text,
 )
 
@@ -157,6 +158,7 @@ def main() -> None:
         template,
         {
             "REVIEW_BRIEF": review_brief,
+            "REVIEW_DIMENSIONS": review_dimensions_text(),
             "LITERATURE_CARDS_JSON": json_dumps(cards),
             "SYNTHESIS_MARKDOWN": synthesis_markdown,
         },
@@ -184,4 +186,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

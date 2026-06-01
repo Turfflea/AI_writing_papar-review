@@ -243,6 +243,44 @@ label select {
   gap: 8px;
 }
 
+.dimension-box {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.dimension-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dimension-option {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.dimension-option input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
 .paper-list,
 .output-list {
   display: flex;
@@ -382,6 +420,7 @@ label select {
 
 .options-row {
   display: flex;
+  flex-wrap: wrap;
   min-height: 0;
 }
 
@@ -394,6 +433,54 @@ label select {
   flex-direction: column;
   gap: 10px;
   min-height: 320px;
+}
+
+.screening-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.screening-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.screening-group {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.screening-group h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.screening-group h4 span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.screening-item {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.screening-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.screening-item p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 #promptEditor {
@@ -466,6 +553,11 @@ label select {
   color: var(--red);
 }
 
+.mini-status.submitted {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
 .mini-status.imported,
 .mini-status.inventoried,
 .mini-status.card_only {
@@ -533,6 +625,10 @@ td {
   }
 
   .output-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .screening-groups {
     grid-template-columns: 1fr;
   }
 }

@@ -4,6 +4,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。大纲章节应优先围绕这些维度组织：
+
+{{REVIEW_DIMENSIONS}}
+
 核心文献筛选结果：
 
 {{FINAL_CORE_SELECTION_JSON}}

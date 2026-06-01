@@ -4,6 +4,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。本次只需要服务这些维度：
+
+{{REVIEW_DIMENSIONS}}
+
 当前综合维度：
 
 {{DIMENSION}}

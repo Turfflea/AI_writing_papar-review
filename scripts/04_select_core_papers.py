@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pipeline_utils import (
     SCREENING_DIR,
@@ -21,6 +22,7 @@ from pipeline_utils import (
     md_escape,
     read_json,
     render_template,
+    review_dimensions_text,
     write_json,
     write_text,
 )
@@ -149,6 +151,7 @@ def selection_to_markdown(selection: dict) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Select core, supporting, and peripheral papers.")
     parser.add_argument("--batch-size", type=int, default=10)
+    parser.add_argument("--concurrency", type=int, default=1, help="Number of batch-screening API calls to run at the same time.")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Write prompts without calling the API.")
     parser.add_argument("--only-global", action="store_true", help="Use existing batch results and only run global selection.")
@@ -182,51 +185,74 @@ def main() -> None:
         print(f"Applied human overrides to {final_path}")
         return
 
-    batch_results = []
     batches = chunked(cards, args.batch_size)
+    batch_results: list[dict] = []
+
+    def process_batch(index: int, batch: list[dict]) -> tuple[int, dict | None, str]:
+        batch_id = f"batch_{index:02d}"
+        out_path = SCREENING_DIR / f"{batch_id}_screening.json"
+        raw_path = SCREENING_DIR / f"{batch_id}_screening.raw_response.txt"
+        prompt_path = SCREENING_DIR / f"{batch_id}_screening.prompt.md"
+        if out_path.exists() and not args.force and not args.dry_run:
+            return index, read_json(out_path), f"[{index}/{len(batches)}] Skip existing batch: {batch_id}"
+
+        prompt = render_template(
+            batch_template,
+            {
+                "REVIEW_BRIEF": review_brief,
+                "REVIEW_DIMENSIONS": review_dimensions_text(),
+                "BATCH_LITERATURE_CARDS_JSON": json_dumps(batch),
+                "BATCH_ID": batch_id,
+            },
+        )
+        write_text(prompt_path, prompt)
+        if args.dry_run:
+            return index, None, f"[{index}/{len(batches)}] Wrote dry-run prompt: {prompt_path}"
+
+        print(f"[{index}/{len(batches)}] Screening {batch_id}")
+        raw_path.unlink(missing_ok=True)
+        log_event("select_core_papers", {"batch_id": batch_id, "status": "submitted", "prompt": str(prompt_path)})
+        content, meta = chat_completion(
+            prompt,
+            model=args.model,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+        )
+        write_text(raw_path, content)
+        result = extract_json_object(content)
+        write_json(out_path, result)
+        log_event(
+            "select_core_papers",
+            {
+                "batch_id": batch_id,
+                "status": "ok",
+                "elapsed_seconds": meta.get("_elapsed_seconds"),
+            },
+        )
+        return index, result, f"[{index}/{len(batches)}] Screened {batch_id}"
+
     if not args.only_global:
-        for index, batch in enumerate(batches, start=1):
-            batch_id = f"batch_{index:02d}"
-            out_path = SCREENING_DIR / f"{batch_id}_screening.json"
-            raw_path = SCREENING_DIR / f"{batch_id}_screening.raw_response.txt"
-            prompt_path = SCREENING_DIR / f"{batch_id}_screening.prompt.md"
-            if out_path.exists() and not args.force and not args.dry_run:
-                print(f"[{index}/{len(batches)}] Skip existing batch: {batch_id}")
-                batch_results.append(read_json(out_path))
-                continue
-
-            prompt = render_template(
-                batch_template,
-                {
-                    "REVIEW_BRIEF": review_brief,
-                    "BATCH_LITERATURE_CARDS_JSON": json_dumps(batch),
-                    "BATCH_ID": batch_id,
-                },
-            )
-            if args.dry_run:
-                write_text(prompt_path, prompt)
-                print(f"[{index}/{len(batches)}] Wrote dry-run prompt: {prompt_path}")
-                continue
-
-            print(f"[{index}/{len(batches)}] Screening {batch_id}")
-            content, meta = chat_completion(
-                prompt,
-                model=args.model,
-                temperature=args.temperature,
-                max_tokens=args.max_tokens,
-            )
-            write_text(raw_path, content)
-            result = extract_json_object(content)
-            write_json(out_path, result)
-            batch_results.append(result)
-            log_event(
-                "select_core_papers",
-                {
-                    "batch_id": batch_id,
-                    "status": "ok",
-                    "elapsed_seconds": meta.get("_elapsed_seconds"),
-                },
-            )
+        concurrency = max(1, args.concurrency)
+        if concurrency == 1 or len(batches) <= 1:
+            for index, batch in enumerate(batches, start=1):
+                _, result, message = process_batch(index, batch)
+                print(message)
+                if result is not None:
+                    batch_results.append(result)
+        else:
+            print(f"Screening {len(batches)} batches with concurrency={concurrency}")
+            indexed_results: list[tuple[int, dict]] = []
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {
+                    executor.submit(process_batch, index, batch): index
+                    for index, batch in enumerate(batches, start=1)
+                }
+                for future in as_completed(futures):
+                    index, result, message = future.result()
+                    print(message)
+                    if result is not None:
+                        indexed_results.append((index, result))
+            batch_results = [result for _, result in sorted(indexed_results, key=lambda item: item[0])]
 
     if args.only_global:
         batch_results = [read_json(path) for path in sorted(SCREENING_DIR.glob("batch_*_screening.json"))]
@@ -247,6 +273,7 @@ def main() -> None:
         global_template,
         {
             "REVIEW_BRIEF": review_brief,
+            "REVIEW_DIMENSIONS": review_dimensions_text(),
             "BATCH_SCREENING_RESULTS_JSON": json_dumps(batch_results),
             "ALL_PAPER_BRIEF_TABLE": brief_table(cards),
             "HUMAN_NOTES": json_dumps(load_human_overrides().get("core_selection", {})),

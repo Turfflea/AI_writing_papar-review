@@ -6,6 +6,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。筛选理由和 main_use 应优先围绕这些维度：
+
+{{REVIEW_DIMENSIONS}}
+
 本批文献卡片如下：
 
 {{BATCH_LITERATURE_CARDS_JSON}}

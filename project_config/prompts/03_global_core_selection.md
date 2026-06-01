@@ -4,6 +4,10 @@
 
 {{REVIEW_BRIEF}}
 
+本项目启用的综述维度如下。最终文献层级和 primary_roles 应优先围绕这些维度：
+
+{{REVIEW_DIMENSIONS}}
+
 各批次初筛结果如下：
 
 {{BATCH_SCREENING_RESULTS_JSON}}

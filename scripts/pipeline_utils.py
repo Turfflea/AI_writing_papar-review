@@ -16,6 +16,7 @@ PAPERS_DIR = PROJECT_ROOT / "papers_md"
 CONFIG_DIR = PROJECT_ROOT / "project_config"
 PROMPTS_DIR = CONFIG_DIR / "prompts"
 HUMAN_OVERRIDES_PATH = CONFIG_DIR / "human_overrides.json"
+REVIEW_DIMENSIONS_PATH = CONFIG_DIR / "review_dimensions.json"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 CARDS_DIR = OUTPUTS_DIR / "literature_cards"
 SCREENING_DIR = OUTPUTS_DIR / "screening"
@@ -81,7 +82,39 @@ def load_review_brief() -> str:
     path = CONFIG_DIR / "review_brief.md"
     if not path.exists():
         raise FileNotFoundError(f"Missing review brief: {path}")
-    return read_text(path)
+    review_brief = read_text(path)
+    dimensions_path = CONFIG_DIR / "review_dimensions.json"
+    if dimensions_path.exists():
+        try:
+            data = read_json(dimensions_path)
+            selected = data.get("selected_dimensions", []) if isinstance(data, dict) else []
+            dimensions = [str(item).strip() for item in selected if str(item).strip()]
+            if dimensions:
+                review_brief += "\n\n# 本项目启用的综述维度\n\n" + "、".join(dimensions) + "\n"
+        except Exception:
+            pass
+    return review_brief
+
+
+DEFAULT_REVIEW_DIMENSIONS = ["研究方法", "研究发现", "理论视角", "研究情境", "研究缺口"]
+
+
+def load_review_dimensions() -> list[str]:
+    if not REVIEW_DIMENSIONS_PATH.exists():
+        return DEFAULT_REVIEW_DIMENSIONS
+    try:
+        data = read_json(REVIEW_DIMENSIONS_PATH)
+    except Exception:
+        return DEFAULT_REVIEW_DIMENSIONS
+    selected = data.get("selected_dimensions") if isinstance(data, dict) else None
+    if not isinstance(selected, list):
+        return DEFAULT_REVIEW_DIMENSIONS
+    dimensions = [str(item).strip() for item in selected if str(item).strip()]
+    return dimensions or DEFAULT_REVIEW_DIMENSIONS
+
+
+def review_dimensions_text() -> str:
+    return "、".join(load_review_dimensions())
 
 
 def default_human_overrides() -> dict[str, Any]:
