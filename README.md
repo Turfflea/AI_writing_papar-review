@@ -1,4 +1,4 @@
-# AI Literature Review Pipeline
+# AI Writing Paper Review
 
 This project turns a folder of Markdown papers into a structured literature review workflow.
 It is designed for Chinese academic review writing and uses an OpenAI-compatible DeepSeek API by default.
