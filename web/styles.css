@@ -99,6 +99,7 @@ input {
 button {
   padding: 0 12px;
   cursor: pointer;
+  line-height: 1.25;
 }
 
 button:hover {
@@ -149,7 +150,7 @@ button.danger {
   display: grid;
   grid-template-columns: minmax(360px, 460px) 1fr;
   height: calc(100vh - 76px);
-  min-height: 760px;
+  min-height: 0;
 }
 
 .left-panel,
@@ -251,7 +252,7 @@ label select {
 }
 
 .paper-list {
-  max-height: 160px;
+  max-height: 240px;
 }
 
 .paper-item,
@@ -264,6 +265,23 @@ label select {
   gap: 10px;
   padding: 8px 10px;
   height: auto;
+}
+
+.paper-item {
+  align-items: flex-start;
+  min-height: 58px;
+  overflow: hidden;
+}
+
+.paper-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .steps {
@@ -313,23 +331,46 @@ label select {
 }
 
 .workspace {
-  display: grid;
-  grid-template-rows: auto auto minmax(230px, 0.8fr) minmax(230px, 0.9fr) minmax(140px, 0.45fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .workspace > section {
   padding: 14px;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .step-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
+}
+
+.step-header > div:first-child {
+  min-width: 0;
+}
+
+.step-actions {
+  align-items: stretch;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  max-width: 620px;
+}
+
+.step-actions button {
+  flex: 0 0 auto;
+  min-width: 112px;
+  white-space: nowrap;
+}
+
+#rollbackBtn {
+  min-width: 136px;
 }
 
 #stepDescription {
@@ -352,17 +393,19 @@ label select {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 320px;
 }
 
 #promptEditor {
-  flex: 1;
-  min-height: 140px;
+  flex: 1 1 auto;
+  min-height: 190px;
   resize: none;
 }
 
 .output-panel {
   display: flex;
   flex-direction: column;
+  min-height: 340px;
 }
 
 .output-grid {
@@ -389,6 +432,7 @@ label select {
 .log-panel {
   display: flex;
   flex-direction: column;
+  min-height: 190px;
 }
 
 #jobLog {
@@ -407,6 +451,7 @@ label select {
 .mini-status {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   min-height: 24px;
   padding: 0 7px;
   border-radius: 6px;
@@ -419,6 +464,13 @@ label select {
 .mini-status.failed {
   background: var(--red-bg);
   color: var(--red);
+}
+
+.mini-status.imported,
+.mini-status.inventoried,
+.mini-status.card_only {
+  background: var(--blue-bg);
+  color: var(--blue);
 }
 
 .hidden {
@@ -458,10 +510,17 @@ td {
 }
 
 @media (max-width: 980px) {
-  .topbar,
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .top-actions {
+    justify-content: flex-start;
+  }
+
   .step-header {
     align-items: stretch;
-    flex-direction: column;
   }
 
   .layout {
@@ -470,7 +529,6 @@ td {
   }
 
   .workspace {
-    grid-template-rows: none;
     overflow: visible;
   }
 
@@ -479,3 +537,33 @@ td {
   }
 }
 
+@media (max-width: 1280px) {
+  .step-header {
+    grid-template-columns: 1fr;
+  }
+
+  .step-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .step-actions button {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 560px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .left-panel,
+  .workspace {
+    padding: 10px;
+  }
+
+  .step-actions button {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}

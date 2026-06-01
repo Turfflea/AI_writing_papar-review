@@ -93,8 +93,8 @@ function renderPapers() {
     .map(
       (paper) => `
         <button class="paper-item" data-output="${escapeHtml(paper.paper_file || paper.card_path)}">
-          <span>${escapeHtml(paper.paper_id)}</span>
-          <span class="mini-status ${paper.status}">${statusLabel(paper.status)}</span>
+          <span class="paper-name" title="${escapeHtml(paper.display_name || paper.paper_id)}">${escapeHtml(paper.display_name || paper.paper_id)}</span>
+          <span class="mini-status ${paper.library_status || "imported"}">${statusLabel(paper.library_status || "imported")}</span>
         </button>
       `,
     )
@@ -112,6 +112,9 @@ function statusLabel(status) {
     prompted: "已生成提示词",
     done: "已完成",
     partial: "部分完成",
+    imported: "已导入",
+    inventoried: "已扫描",
+    card_only: "仅有卡片",
   }[status] || status;
 }
 
@@ -384,4 +387,3 @@ setInterval(async () => {
 }, 1500);
 
 refreshState();
-

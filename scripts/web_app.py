@@ -338,6 +338,7 @@ def project_papers(project_root: Path) -> list[Path]:
 def card_progress(project_root: Path) -> dict[str, Any]:
     papers = project_papers(project_root)
     cards_dir = project_root / "outputs" / "literature_cards"
+    inventory_done = output_path_done(project_root, "outputs/paper_inventory.csv")
     errors: dict[str, str] = {}
     log_path = project_root / "outputs" / "logs" / "extract_cards.jsonl"
     if log_path.exists():
@@ -368,8 +369,10 @@ def card_progress(project_root: Path) -> dict[str, Any]:
         rows.append(
             {
                 "paper_id": paper_id,
+                "display_name": paper.stem,
                 "paper_file": rel_to_project(paper, project_root),
                 "status": status,
+                "library_status": "inventoried" if inventory_done else "imported",
                 "card_path": rel_to_project(json_path, project_root) if json_path.exists() else "",
                 "raw_response_path": rel_to_project(raw_path, project_root) if raw_path.exists() else "",
                 "error": errors.get(paper_id, ""),
@@ -382,8 +385,10 @@ def card_progress(project_root: Path) -> dict[str, Any]:
             rows.append(
                 {
                     "paper_id": paper_id,
+                    "display_name": paper_id,
                     "paper_file": "",
                     "status": "success",
+                    "library_status": "card_only",
                     "card_path": rel_to_project(json_path, project_root),
                     "raw_response_path": "",
                     "error": "",
