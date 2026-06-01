@@ -14,6 +14,7 @@ from pipeline_utils import (
     ensure_dirs,
     extract_outline_sections,
     json_dumps,
+    human_note_for_section,
     load_cards,
     load_prompt,
     load_review_brief,
@@ -120,6 +121,7 @@ def main() -> None:
                 "RELEVANT_SYNTHESIS_MARKDOWN": synthesis_markdown,
                 "RELEVANT_EVIDENCE_MATRIX": evidence_matrix,
                 "RELEVANT_CORE_CARDS_JSON": json_dumps(core_cards),
+                "SECTION_NOTES": human_note_for_section(title) or "无",
                 "SECTION_TITLE": title,
             },
         )
@@ -151,4 +153,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

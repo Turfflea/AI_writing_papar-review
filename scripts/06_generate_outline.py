@@ -14,6 +14,7 @@ from pipeline_utils import (
     load_prompt,
     load_review_brief,
     log_event,
+    outline_human_notes,
     read_all_markdown,
     read_json,
     read_text,
@@ -62,6 +63,7 @@ def main() -> None:
             "FINAL_CORE_SELECTION_JSON": json_dumps(read_json(selection_path)),
             "ALL_SYNTHESIS_MARKDOWN": read_all_markdown(synthesis_paths),
             "EVIDENCE_MATRIX_MARKDOWN": read_text(matrix_path),
+            "OUTLINE_NOTES": outline_human_notes() or "无",
         },
     )
     prompt_path = DRAFTS_DIR / "review_outline.prompt.md"
@@ -85,4 +87,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

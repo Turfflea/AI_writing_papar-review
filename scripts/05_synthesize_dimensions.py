@@ -10,6 +10,7 @@ from pipeline_utils import (
     chat_completion,
     ensure_dirs,
     json_dumps,
+    human_note_for_dimension,
     load_cards,
     load_prompt,
     load_review_brief,
@@ -141,6 +142,7 @@ def main() -> None:
                 "REVIEW_BRIEF": review_brief,
                 "DIMENSION": dimension,
                 "DIMENSION_INSTRUCTION": instruction,
+                "HUMAN_NOTES": human_note_for_dimension(dimension) or "无",
                 "CORE_LITERATURE_CARDS_JSON": json_dumps(core_cards),
                 "SUPPORTING_LITERATURE_CARDS_JSON": json_dumps(supporting_cards),
             },
@@ -169,4 +171,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

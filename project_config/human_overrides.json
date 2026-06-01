@@ -1,0 +1,41 @@
+{
+  "card_review_notes": {
+    "_instructions": "Optional per-paper notes. Use paper_id as the key and write anything the AI should consider in later stages."
+  },
+  "core_selection": {
+    "_instructions": "Edit these lists after AI screening if you want to promote, demote, or reclassify papers. Leave paper_id empty examples out or delete them.",
+    "promote_to_core": [
+      {
+        "paper_id": "",
+        "reason": "",
+        "primary_roles": ["methodology", "findings"],
+        "priority": "high"
+      }
+    ],
+    "move_to_supporting": [
+      {
+        "paper_id": "",
+        "reason": "",
+        "possible_use": ["background"]
+      }
+    ],
+    "move_to_peripheral": [
+      {
+        "paper_id": "",
+        "reason": ""
+      }
+    ]
+  },
+  "synthesis_notes": {
+    "研究方法": "",
+    "研究发现": "",
+    "理论视角": "",
+    "研究情境": "",
+    "研究缺口": ""
+  },
+  "outline_notes": "",
+  "section_notes": {
+    "_instructions": "Use exact section titles as keys. Values are instructions to inject when writing that section."
+  }
+}
+

@@ -12,6 +12,10 @@
 
 {{DIMENSION_INSTRUCTION}}
 
+用户人工补充要求如下：
+
+{{HUMAN_NOTES}}
+
 核心文献卡片如下：
 
 {{CORE_LITERATURE_CARDS_JSON}}
@@ -79,4 +83,3 @@
 ## 8. 可写入综述正文的草稿段落
 
 写 3-6 段正式学术中文段落。段落中保留引用占位符，例如 `[Kellogg_2020]`。
-

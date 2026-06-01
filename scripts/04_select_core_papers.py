@@ -5,13 +5,16 @@ import argparse
 
 from pipeline_utils import (
     SCREENING_DIR,
+    author_year,
     brief_table,
+    card_by_id,
     chat_completion,
     chunked,
     ensure_dirs,
     extract_json_object,
     json_dumps,
     load_cards,
+    load_human_overrides,
     load_prompt,
     load_review_brief,
     log_event,
@@ -21,6 +24,78 @@ from pipeline_utils import (
     write_json,
     write_text,
 )
+
+
+def override_items(section: dict, key: str) -> list[dict]:
+    items = section.get(key, [])
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict) and str(item.get("paper_id", "")).strip()]
+
+
+def remove_paper(selection: dict, paper_id: str) -> None:
+    for key in ["final_core_papers", "supporting_papers", "peripheral_papers"]:
+        rows = selection.get(key, [])
+        if isinstance(rows, list):
+            selection[key] = [row for row in rows if str(row.get("paper_id", "")) != paper_id]
+
+
+def apply_core_overrides(selection: dict, all_cards: dict[str, dict]) -> dict:
+    overrides = load_human_overrides().get("core_selection", {})
+    if not isinstance(overrides, dict):
+        return selection
+
+    applied: list[dict] = []
+    selection.setdefault("final_core_papers", [])
+    selection.setdefault("supporting_papers", [])
+    selection.setdefault("peripheral_papers", [])
+
+    for item in override_items(overrides, "promote_to_core"):
+        paper_id = str(item["paper_id"]).strip()
+        remove_paper(selection, paper_id)
+        card = all_cards.get(paper_id, {"paper_id": paper_id})
+        selection["final_core_papers"].append(
+            {
+                "paper_id": paper_id,
+                "author_year": author_year(card),
+                "core_reason": item.get("reason") or "User manually promoted this paper to core.",
+                "primary_roles": item.get("primary_roles") or ["findings"],
+                "covered_review_questions": item.get("covered_review_questions", []),
+                "priority": item.get("priority") or "high",
+            }
+        )
+        applied.append({"action": "promote_to_core", "paper_id": paper_id})
+
+    for item in override_items(overrides, "move_to_supporting"):
+        paper_id = str(item["paper_id"]).strip()
+        remove_paper(selection, paper_id)
+        card = all_cards.get(paper_id, {"paper_id": paper_id})
+        selection["supporting_papers"].append(
+            {
+                "paper_id": paper_id,
+                "author_year": author_year(card),
+                "supporting_reason": item.get("reason") or "User manually moved this paper to supporting.",
+                "possible_use": item.get("possible_use") or ["background"],
+            }
+        )
+        applied.append({"action": "move_to_supporting", "paper_id": paper_id})
+
+    for item in override_items(overrides, "move_to_peripheral"):
+        paper_id = str(item["paper_id"]).strip()
+        remove_paper(selection, paper_id)
+        card = all_cards.get(paper_id, {"paper_id": paper_id})
+        selection["peripheral_papers"].append(
+            {
+                "paper_id": paper_id,
+                "author_year": author_year(card),
+                "reason": item.get("reason") or "User manually moved this paper to peripheral.",
+            }
+        )
+        applied.append({"action": "move_to_peripheral", "paper_id": paper_id})
+
+    if applied:
+        selection["human_overrides_applied"] = applied
+    return selection
 
 
 def selection_to_markdown(selection: dict) -> str:
@@ -77,6 +152,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Write prompts without calling the API.")
     parser.add_argument("--only-global", action="store_true", help="Use existing batch results and only run global selection.")
+    parser.add_argument("--apply-overrides-only", action="store_true", help="Apply project_config/human_overrides.json to the existing final selection.")
     parser.add_argument("--model", default=None)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
@@ -87,9 +163,23 @@ def main() -> None:
     batch_template = load_prompt("02_batch_core_screening.md")
     global_template = load_prompt("03_global_core_selection.md")
     cards = load_cards(compact=True)
+    all_cards_by_id = card_by_id(compact=True)
 
     if not cards:
         print("No literature cards found. Run scripts/02_extract_cards.py first.")
+        return
+
+    final_path = SCREENING_DIR / "final_core_selection.json"
+    if args.apply_overrides_only:
+        if not final_path.exists():
+            print(f"Missing {final_path}. Run normal screening first.")
+            return
+        selection = apply_core_overrides(read_json(final_path), all_cards_by_id)
+        write_json(final_path, selection)
+        write_text(SCREENING_DIR / "final_core_selection.md", selection_to_markdown(selection))
+        core_ids = [str(item.get("paper_id", "")) for item in selection.get("final_core_papers", [])]
+        write_text(SCREENING_DIR / "core_paper_ids.txt", "\n".join(core_ids) + ("\n" if core_ids else ""))
+        print(f"Applied human overrides to {final_path}")
         return
 
     batch_results = []
@@ -149,7 +239,6 @@ def main() -> None:
         print("No batch screening results available.")
         return
 
-    final_path = SCREENING_DIR / "final_core_selection.json"
     if final_path.exists() and not args.force:
         print(f"Skip existing global selection: {final_path}")
         return
@@ -160,6 +249,7 @@ def main() -> None:
             "REVIEW_BRIEF": review_brief,
             "BATCH_SCREENING_RESULTS_JSON": json_dumps(batch_results),
             "ALL_PAPER_BRIEF_TABLE": brief_table(cards),
+            "HUMAN_NOTES": json_dumps(load_human_overrides().get("core_selection", {})),
         },
     )
     prompt_path = SCREENING_DIR / "global_core_selection.prompt.md"
@@ -173,7 +263,7 @@ def main() -> None:
         max_tokens=args.max_tokens,
     )
     write_text(raw_path, content)
-    selection = extract_json_object(content)
+    selection = apply_core_overrides(extract_json_object(content), all_cards_by_id)
     write_json(final_path, selection)
     write_text(SCREENING_DIR / "final_core_selection.md", selection_to_markdown(selection))
     core_ids = [str(item.get("paper_id", "")) for item in selection.get("final_core_papers", [])]
@@ -192,4 +282,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

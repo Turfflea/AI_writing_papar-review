@@ -23,6 +23,20 @@ python3 scripts/07_write_review.py
 
 Each script is resumable by default: existing outputs are skipped unless you pass `--force`.
 
+## Human Review Points
+
+You can intervene between steps by editing generated outputs or the override file:
+
+- Edit any generated card in `outputs/literature_cards/*.card.json` before screening.
+- Edit `project_config/human_overrides.json` to promote/demote core papers, add synthesis notes, outline notes, or section-specific writing instructions.
+- After changing core paper overrides, run:
+
+```bash
+python3 scripts/04_select_core_papers.py --apply-overrides-only
+```
+
+Later scripts read `project_config/human_overrides.json`, so manual decisions are preserved and visible.
+
 ## Main Outputs
 
 - `outputs/literature_cards/`: one structured card per paper, in JSON and Markdown.

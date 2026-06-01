@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PAPERS_DIR = ROOT / "papers_md"
 CONFIG_DIR = ROOT / "project_config"
 PROMPTS_DIR = CONFIG_DIR / "prompts"
+HUMAN_OVERRIDES_PATH = CONFIG_DIR / "human_overrides.json"
 OUTPUTS_DIR = ROOT / "outputs"
 CARDS_DIR = OUTPUTS_DIR / "literature_cards"
 SCREENING_DIR = OUTPUTS_DIR / "screening"
@@ -80,6 +81,61 @@ def load_review_brief() -> str:
     if not path.exists():
         raise FileNotFoundError(f"Missing review brief: {path}")
     return read_text(path)
+
+
+def default_human_overrides() -> dict[str, Any]:
+    return {
+        "card_review_notes": {},
+        "core_selection": {
+            "promote_to_core": [],
+            "move_to_supporting": [],
+            "move_to_peripheral": [],
+        },
+        "synthesis_notes": {},
+        "outline_notes": "",
+        "section_notes": {},
+    }
+
+
+def load_human_overrides() -> dict[str, Any]:
+    if not HUMAN_OVERRIDES_PATH.exists():
+        return default_human_overrides()
+    try:
+        data = read_json(HUMAN_OVERRIDES_PATH)
+    except Exception:
+        return default_human_overrides()
+    if not isinstance(data, dict):
+        return default_human_overrides()
+    defaults = default_human_overrides()
+    for key, value in defaults.items():
+        data.setdefault(key, value)
+    return data
+
+
+def human_note_for_dimension(dimension: str) -> str:
+    notes = load_human_overrides().get("synthesis_notes", {})
+    if isinstance(notes, dict):
+        return str(notes.get(dimension, "")).strip()
+    return ""
+
+
+def human_note_for_section(section_title: str) -> str:
+    notes = load_human_overrides().get("section_notes", {})
+    if not isinstance(notes, dict):
+        return ""
+    exact = str(notes.get(section_title, "")).strip()
+    if exact:
+        return exact
+    for key, value in notes.items():
+        if key.startswith("_"):
+            continue
+        if key and (key in section_title or section_title in key):
+            return str(value).strip()
+    return ""
+
+
+def outline_human_notes() -> str:
+    return str(load_human_overrides().get("outline_notes", "")).strip()
 
 
 def load_prompt(name: str) -> str:
@@ -224,7 +280,7 @@ def author_year(card: dict[str, Any]) -> str:
 
 def compact_card(card: dict[str, Any]) -> dict[str, Any]:
     findings = as_list(card.get("main_findings"))[:8]
-    return {
+    compact = {
         "paper_id": card.get("paper_id", ""),
         "author_year": author_year(card),
         "bibliographic_info": card.get("bibliographic_info", {}),
@@ -239,6 +295,11 @@ def compact_card(card: dict[str, Any]) -> dict[str, Any]:
         "uncertainties": card.get("uncertainties", []),
         "one_sentence_summary": card.get("one_sentence_summary", ""),
     }
+    review_notes = load_human_overrides().get("card_review_notes", {})
+    paper_id = str(card.get("paper_id", ""))
+    if isinstance(review_notes, dict) and paper_id in review_notes:
+        compact["human_review_note"] = review_notes[paper_id]
+    return compact
 
 
 def load_cards(compact: bool = False) -> list[dict[str, Any]]:
@@ -400,4 +461,3 @@ def read_all_markdown(paths: list[Path]) -> str:
     for path in paths:
         parts.append(f"\n\n<!-- {path.name} -->\n\n{read_text(path)}")
     return "\n".join(parts).strip()
-
